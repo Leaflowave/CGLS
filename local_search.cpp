@@ -1,4 +1,4 @@
-﻿#include"func_state.h"
+#include"func_state.h"
 #include"global_variables.h"
 #include <vector>
 #include <queue>
@@ -8,15 +8,7 @@
 #include <string>
 #include <sstream>
 #include <time.h>
-
-
-// ------------------------------------------------------------------
-//  iuc_components
-//  Compute connected components of the induced subgraph G[S_nodes].
-// ------------------------------------------------------------------
-#include <vector>
 #include <cstdint>
-#include <algorithm>
 
 void iuc_components(const std::vector<int>& S_nodes,
 	std::vector<std::vector<int>>& comps) {
@@ -62,8 +54,7 @@ void iuc_components(const std::vector<int>& S_nodes,
 			st.pop_back();
 			comp.push_back(v);
 
-			for (int ei = pstart[v]; ei < pstart[v + 1]; ++ei) {
-				int u = edges[ei];
+			for (int u : adj[v]) {
 				if (inS[u] != stamp) continue;
 				if (visited[u] == stamp) continue;
 				visited[u] = stamp;
@@ -74,7 +65,6 @@ void iuc_components(const std::vector<int>& S_nodes,
 		comps.push_back(std::move(comp));
 	}
 }
-
 
 
 std::vector<int> random_maximal_iuc(const std::vector<int>& S_init,
@@ -96,14 +86,6 @@ std::vector<int> random_maximal_iuc(const std::vector<int>& S_init,
 		}
 	}
 
-	//int comp_cnt = 0;
-	////Validate initial S.,判断是否是iuc
-	//if (!validate_iuc(S, comp_cnt)) {
-	//	std::cout << "Input S is not an IUC: " << std::endl;
-	//	std::exit(-1);
-	//}
-
-	// 计算当前 G[S] 的连通分量，并建立顶点→分量索引
 	std::vector<std::vector<int>> comps;
 	iuc_components(S, comps);
 
@@ -119,20 +101,26 @@ std::vector<int> random_maximal_iuc(const std::vector<int>& S_init,
 		}
 	}
 
-	// 不断向 S 加点，直到极大
 	std::vector<int> comp_size(comps.size(), 0);
 	for (int ci = 0; ci < (int)comps.size(); ++ci) comp_size[ci] = (int)comps[ci].size();
 
-	std::vector<int> cover_cnt(Num_v, 0);     
-	std::vector<int> touch_comp(Num_v, -1);   
-	std::vector<int> touch_cnt(Num_v, 0);    
+	std::vector<int> cover_cnt(Num_v, 0);
+	std::vector<int> touch_comp(Num_v, -1);
+	std::vector<int> touch_cnt(Num_v, 0);
 	std::vector<uint8_t> touch_multi(Num_v, 0);
 
-	std::vector<int> uncovered;             
-	std::vector<int> pos_uncovered(Num_v, -1);
 
-	std::vector<int> joinable;                
-	std::vector<int> active;          
+	std::vector<double> base_w(Num_v, 1.0);
+	if (weights != nullptr && !weights->empty()) {
+		int WN = (int)weights->size();
+		for (int v = 0; v < Num_v; ++v) {
+			double x = (v < WN ? (*weights)[v] : 0.0);
+			base_w[v] = std::exp(-x);
+		}
+	}
+
+	std::vector<int> uncovered;
+	std::vector<int> pos_uncovered(Num_v, -1);
 
 	auto remove_from_uncovered = [&](int v) {
 		int pos = pos_uncovered[v];
@@ -151,10 +139,7 @@ std::vector<int> random_maximal_iuc(const std::vector<int>& S_init,
 		};
 
 	auto is_joinable = [&](int v) -> bool {
-		if (v < 0 || v >= Num_v) {
-			cout << "error in is_joinable" << endl;
-			return false;
-		}
+		if (v < 0 || v >= Num_v) return false;
 		if (Must_not_in_S[v]) return false;
 		if (inS[v]) return false;
 		if (touch_multi[v]) return false;
@@ -163,26 +148,63 @@ std::vector<int> random_maximal_iuc(const std::vector<int>& S_init,
 		return touch_cnt[v] == comp_size[cid];
 		};
 
-	auto push_joinable_if = [&](int v) {
-		if (is_joinable(v)) joinable.push_back(v);
+
+	std::vector<int> pool;                 // 候选顶点集合（无重复、干净）
+	std::vector<int> pos_pool(Num_v, -1);  // 顶点在 pool 中的位置
+	std::vector<int> pool_cid(Num_v, -2);  // v 在 pool 里时对应 cid：joinable->cid, uncovered->-1
+	double pool_sum_w = 0.0;               // pool 中权重总和
+
+	auto pool_add = [&](int v, int cid) {
+		if (pos_pool[v] != -1) {
+			pool_cid[v] = cid;
+			return;
+		}
+		pos_pool[v] = (int)pool.size();
+		pool.push_back(v);
+		pool_cid[v] = cid;
+		pool_sum_w += base_w[v];
+		};
+
+	auto pool_remove = [&](int v) {
+		int pos = pos_pool[v];
+		if (pos < 0) return;
+		pool_sum_w -= base_w[v];
+		int last = pool.back();
+		pool[pos] = last;
+		pos_pool[last] = pos;
+		pool.pop_back();
+		pos_pool[v] = -1;
+		pool_cid[v] = -2;
+		};
+
+	auto refresh_candidate = [&](int v) {
+		if (v < 0 || v >= Num_v) return;
+		if (Must_not_in_S[v] || inS[v]) { pool_remove(v); return; }
+
+
+		if (cover_cnt[v] == 0) {
+			pool_add(v, -1);
+			return;
+		}
+
+
+		if (is_joinable(v)) {
+			pool_add(v, touch_comp[v]);
+			return;
+		}
+
+		pool_remove(v);
 		};
 
 
 	for (int s : S) {
 		int cid = comp_index[s];
-		for (int ei = pstart[s]; ei < pstart[s + 1]; ++ei) {
-			int x = edges[ei];
-			if (x < 0 || x >= Num_v) {
-				cout << "error in comp_index" << endl;
-				exit(-1);
-				continue;
-			}
+		for (int x : adj[s]) {
+			if (x < 0 || x >= Num_v) continue;
 			if (Must_not_in_S[x]) continue;
-			if (inS[x]) continue; 
-
+			if (inS[x]) continue;
 
 			cover_cnt[x]++;
-
 
 			if (touch_multi[x]) continue;
 			if (touch_comp[x] == -1) {
@@ -200,22 +222,17 @@ std::vector<int> random_maximal_iuc(const std::vector<int>& S_init,
 
 
 	uncovered.reserve(Num_v);
+	pool.reserve(Num_v);
+
 	for (int v = 0; v < Num_v; ++v) {
-		if (Must_not_in_S[v]) continue;
-		if (inS[v]) continue;
+		if (Must_not_in_S[v] || inS[v]) continue;
+
 		if (cover_cnt[v] == 0) add_to_uncovered(v);
+
+		refresh_candidate(v);
 	}
 
-
-	joinable.reserve(100000);
-	for (int v = 0; v < Num_v; ++v) {
-		if (cover_cnt[v] == 0) continue;
-		push_joinable_if(v);
-	}
-
-	// --- 3) 增量加入点：更新邻居
 	auto add_vertex_to_S = [&](int v, int cid) {
-
 		if (inS[v]) {
 			cout << "error in add" << endl;
 			exit(-1);
@@ -225,7 +242,7 @@ std::vector<int> random_maximal_iuc(const std::vector<int>& S_init,
 		S.push_back(v);
 
 		remove_from_uncovered(v);
-
+		pool_remove(v);
 
 		if (cid == -1) {
 			cid = (int)comp_size.size();
@@ -239,8 +256,7 @@ std::vector<int> random_maximal_iuc(const std::vector<int>& S_init,
 			comp_index[v] = cid;
 		}
 
-		for (int ei = pstart[v]; ei < pstart[v + 1]; ++ei) {
-			int x = edges[ei];
+		for (int x : adj[v]) {
 			if (x < 0 || x >= Num_v) continue;
 			if (Must_not_in_S[x]) continue;
 			if (inS[x]) continue;
@@ -261,73 +277,90 @@ std::vector<int> random_maximal_iuc(const std::vector<int>& S_init,
 				}
 			}
 
-			push_joinable_if(x);
+			refresh_candidate(x);
 		}
 		};
 
-	while (true) {
-		bool progressed = false;
-		while (!joinable.empty()) {
-			int v = joinable.back();
-			joinable.pop_back();
 
-			if (!is_joinable(v)) continue;       
-			int cid = touch_comp[v];              
-			add_vertex_to_S(v, cid);
-			progressed = true;
-			break; 
+	auto pick_from_pool = [&]() -> int {
+		if (pool.empty()) return -1;
+		if (weights == nullptr || weights->empty() || pool_sum_w <= 0.0) {
+			int idx = std::rand() % pool.size();
+			return pool[idx];
 		}
-		if (progressed) continue;
 
-		if (!uncovered.empty()) {
-			int idx = std::rand() % uncovered.size();
-			int v = uncovered[idx];
+		double r = (double)std::rand() / (double)RAND_MAX * pool_sum_w;
+		double acc = 0.0;
+		for (int i = 0; i < (int)pool.size(); ++i) {
+			int v = pool[i];
+			acc += base_w[v];
+			if (r <= acc) return v;
+		}
+		return pool.back(); 
+		};
 
-			if (Must_not_in_S[v] || inS[v] || cover_cnt[v] != 0)
-			//if (inS[v] || cover_cnt[v] != 0) 
-			{
-				remove_from_uncovered(v);
+	while (true) {
+		if (pool.empty()) break;
+
+		int v = pick_from_pool();
+		if (v < 0) break;
+
+		int cid = pool_cid[v];
+
+		if (cid == -1) {
+			if (Must_not_in_S[v] || inS[v] || cover_cnt[v] != 0) {
+				refresh_candidate(v);
 				continue;
 			}
 			add_vertex_to_S(v, -1);
-			continue;
+		}
+		else {
+			if (!is_joinable(v)) {
+				refresh_candidate(v);
+				continue;
+			}
+			add_vertex_to_S(v, cid);
 		}
 
-		break;
-	}
 
+		if ((double)(clock() - Start_time) / CLOCKS_PER_SEC >= Time_limit) {
+			break;
+		}
+
+	}
 
 	if ((int)S.size() > best_size) {
 		best_size = (int)S.size();
 		best_S = S;
 		Run_time = (double)(clock() - Start_time) / CLOCKS_PER_SEC;
 	}
-	
-	return S;
 
+	return S;
 }
+
+
 
 
 static inline void get_neighbors(int v, vector<int>& nei) {
 	nei.clear();
-	for (int ei = pstart[v]; ei < pstart[v + 1]; ++ei) {
-		nei.push_back(edges[ei]);
+	for (int u : adj[v]) {
+		nei.push_back(u);
 	}
 }
 
 // count |S ∩ N(v)|
 static int count_neighbors_in_set(int v, const unordered_set<int>& S) {
 	int cnt = 0;
-	for (int ei = pstart[v]; ei < pstart[v + 1]; ++ei) {
-		if (S.count(edges[ei])) ++cnt;
+	for (int u : adj[v]) {
+		if (S.count(u)) ++cnt;
 	}
 	return cnt;
 }
 
 static std::unordered_set<int> get_nei(int v) {
 	std::unordered_set<int> nei;
-	for (int i = pstart[v]; i < pstart[v + 1]; ++i) {
-		nei.insert(edges[i]);
+	for (int u : adj[v]) {
+		nei.insert(u);
 	}
 	return nei;
 }
@@ -335,8 +368,8 @@ static std::unordered_set<int> get_nei(int v) {
 // |cc ∩ N(v)|
 static int count_neighbors_in_comp(int v, const unordered_set<int>& cc) {
 	int cnt = 0;
-	for (int ei = pstart[v]; ei < pstart[v + 1]; ++ei) {
-		if (cc.count(edges[ei])) ++cnt;
+	for (int u : adj[v]) {
+		if (cc.count(u)) ++cnt;
 	}
 	return cnt;
 }
@@ -344,8 +377,8 @@ static int count_neighbors_in_comp(int v, const unordered_set<int>& cc) {
 
 static inline std::unordered_set<int> neighbors_of(int v) {
 	std::unordered_set<int> nei;
-	for (int i = pstart[v]; i < pstart[v + 1]; ++i) {
-		nei.insert(edges[i]);
+	for (int u : adj[v]) {
+		nei.insert(u);
 	}
 	return nei;
 }
@@ -365,7 +398,6 @@ std::vector<std::unordered_set<int>> clusters;  // 每个 cluster C
 
 static void rebuild_from_S_conflict(const std::unordered_set<int>& S)
 {
-	// 1️⃣ 初始化 / 重置
 	if ((int)vertex_info.size() != Num_v) {
 		cout << "error in vertex_info" << endl;
 		exit(-1);
@@ -375,10 +407,9 @@ static void rebuild_from_S_conflict(const std::unordered_set<int>& S)
 	clusters.clear();
 	clusters.reserve(S.size());
 
-	// 2️⃣ 计算 G[S] 的连通分量（每个分量即一个 clique）
 	std::vector<int> S_nodes(S.begin(), S.end());
 	std::vector<std::vector<int>> comps;
-	iuc_components(S_nodes, comps);  // 复用原有的连通分量函数
+	iuc_components(S_nodes, comps); 
 
 	for (auto& comp : comps) {
 		std::unordered_set<int> clique;
@@ -402,8 +433,7 @@ static void rebuild_from_S_conflict(const std::unordered_set<int>& S)
 	for (const int u : S) {
 		const int cid = vertex_to_cid[u];
 
-		for (int ei = pstart[u]; ei < pstart[u + 1]; ++ei) {
-			int v = edges[ei]; 
+		for (int v : adj[u]) {
 
 			vertex_info[v].nbr_in_S++;
 
@@ -413,7 +443,7 @@ static void rebuild_from_S_conflict(const std::unordered_set<int>& S)
 		}
 	}
 
-	// 计算 conflict 与 min_conflict_cluster
+
 	for (int v = 0; v < Num_v; ++v) {
 		vertex_info[v].judge_confict = 0;
 		if (S.count(v)) continue;  
@@ -425,7 +455,6 @@ static void rebuild_from_S_conflict(const std::unordered_set<int>& S)
 		int best_cid = -1;
 		int judge_conf = 0;
 
-		// 遍历所有簇，寻找最小冲突
 		for (auto& p : vertex_info[v].nbr_in_C) {
 			int cid = p.first;
 			int val = p.second;
@@ -497,9 +526,7 @@ void update_add_conflict(int v, int cid, std::unordered_set<int>& S)
 	}
 
 
-	for (int ei = pstart[v]; ei < pstart[v + 1]; ++ei) {
-		int u = edges[ei];
-		//if (S.count(u)) continue;
+	for (int u : adj[v]) {
 
 		vertex_info[u].nbr_in_S += 1;
 
@@ -590,9 +617,8 @@ void update_drop_conflict(int v, int cid, std::unordered_set<int>& S)
 		}
 	}
 
-	for (int ei = pstart[v]; ei < pstart[v + 1]; ++ei) {
-		int u = edges[ei];
-		//if (S.count(u)) continue;
+	for (int u : adj[v]) {
+
 		vertex_info[u].nbr_in_S -= 1;
 		if (cid >= 0 && cid < (int)clusters.size()) {
 			auto it = vertex_info[u].nbr_in_C.find(cid);
@@ -695,7 +721,6 @@ static int weighted_choice_exp(const Container& cont, const vector<int>& freq) {
 	return arr.back();
 }
 
-// 只检查 S_nodes 是否是 IUC，返回 true/false
 bool validate_iuc(const std::vector<int>& S_nodes, int& cnt) {
 	std::vector<std::vector<int>> comps;
 	iuc_components(S_nodes, comps);
@@ -707,78 +732,6 @@ bool validate_iuc(const std::vector<int>& S_nodes, int& cnt) {
 			return false;
 		}
 	}
-	return true;
-}
-
-
-
-bool check_IUC_validity(const std::vector<std::unordered_set<int>>& clusters)
-{
-	for (int cid = 0; cid < (int)clusters.size(); ++cid) {
-		const auto& C = clusters[cid];
-		for (int u : C) {
-			for (int v : C) {
-				if (u >= Num_v || v >= Num_v) {
-					std::cerr << "[IUC-Check] Invalid vertex index: "
-						<< u << " or " << v
-						<< " in cluster " << cid << std::endl;
-					return false;
-				}
-				if (u == v) continue;
-				if (!hasEdge(u, v)) {
-					std::cerr << "[IUC-Check] ❌ Intra-clique violation: vertices "
-						<< u << " and " << v
-						<< " are not connected inside cluster " << cid << std::endl;
-					return false;
-				}
-			}
-		}
-	}
-
-	// ===============================
-	// 2️⃣ 检查不同 cluster 是否独立（inter-clique independence）
-	// ===============================
-	for (int i = 0; i < (int)clusters.size(); ++i) {
-		for (int j = i + 1; j < (int)clusters.size(); ++j) {
-			for (int u : clusters[i]) {
-				for (int v : clusters[j]) {
-					if (hasEdge(u, v)) {
-						std::cerr << "[IUC-Check] ❌ Inter-clique violation: "
-							<< "edge (" << u << ", " << v
-							<< ") exists between cluster " << i
-							<< " and cluster " << j << std::endl;
-						return false;
-					}
-				}
-			}
-		}
-	}
-
-	// ===============================
-	// 3️⃣ 检查是否有重复顶点出现在多个 cluster 中
-	// ===============================
-	std::vector<int> appear(Num_v, 0);
-	for (int cid = 0; cid < (int)clusters.size(); ++cid) {
-		for (int v : clusters[cid]) {
-			if (v < 0 || v >= Num_v) {
-				std::cerr << "[IUC-Check] ❌ Invalid vertex id " << v
-					<< " in cluster " << cid << std::endl;
-				return false;
-			}
-			appear[v]++;
-			if (appear[v] > 1) {
-				std::cerr << "[IUC-Check] ❌ Vertex " << v
-					<< " appears in multiple clusters!" << std::endl;
-				return false;
-			}
-		}
-	}
-
-	// ===============================
-	// 4️⃣ 若全部通过，返回 true
-	// ===============================
-	/*std::cout << "[IUC-Check]  Current solution is a valid IUC ("
-		<< clusters.size() << " clusters)" << std::endl;*/
 	return true;
 }
 
@@ -812,26 +765,20 @@ void tabu_search_core_conflict(const std::vector<int>& init_S_vec,
 
 	int depth = 0;
 	int max_depth = Num_v * 2;
-	//if (Num_v > 500) {
-	//	max_depth = Num_v / 2;
-	//}
+
+	if (Density > 0.5) {
+		max_depth = Num_v / 2;
+	}
 
 
-	// 4️⃣ 主循环
 	while (depth < max_depth)
 	{
 		if ((double)(clock() - Start_time) / CLOCKS_PER_SEC >= Time_limit) {
-			if ((int)S.size() > best_size) {
-				Run_time = (double)(clock() - Start_time) / CLOCKS_PER_SEC;
-				best_size = (int)S.size();
-				best_S.assign(S.begin(), S.end());
-			}
 			break;
 		}
 		++depth;
 		bool improved = false;
 
-		// 所有 tabu 减 1
 		for (int v = 0; v < Num_v; ++v)
 			if (tabu_timer[v] > 0) tabu_timer[v]--;
 
@@ -856,16 +803,7 @@ void tabu_search_core_conflict(const std::vector<int>& init_S_vec,
 
 		if (!cand_add.empty()) {
 
-			//int vin;
-			//if (!cand_IS.empty()) {
-			//	//cout << "OM" << endl;
-			//	vin = weighted_choice_exp(cand_IS, freq);
-			//}
-			//else if (!cand_PA.empty()) {
-			//	vin = weighted_choice_exp(cand_PA, freq);
-			//}
 			int vin = weighted_choice_exp(cand_add, freq);
-			//int vin = cand_add[std::rand() % cand_add.size()];
 			int cid = vertex_info[vin].min_conflict_cluster;
 			if (cid < 0) cid = (int)clusters.size(); 
 
@@ -897,10 +835,8 @@ void tabu_search_core_conflict(const std::vector<int>& init_S_vec,
 			if (!cand_swap.empty()) {
 
 				int vin;
-				//int vin = weighted_choice_exp(cand_swap, freq);
 
 				if (!cand_OM.empty())
-					//if(vertex_info[vin].judge_confict == 2)
 				{
 					vin = weighted_choice_exp(cand_OM, freq);
 					int cid = vertex_info[vin].min_conflict_cluster;
@@ -914,9 +850,7 @@ void tabu_search_core_conflict(const std::vector<int>& init_S_vec,
 					int vout = -1;
 
 					// ① OM
-					/*if (in_cc == csize - 1) {*/
 					for (int u : C) {
-						//if (Must_not_in_S[u])continue;
 						if (!hasEdge(u, vin) && u != vin) { vout = u; break; }
 					}
 						
@@ -945,10 +879,8 @@ void tabu_search_core_conflict(const std::vector<int>& init_S_vec,
 					int vout = -1;
 
 					// ② OA：vin 与 C 全连，但与 C 外某点冲突
-					//if (in_cc == csize && vertex_info[vin].nbr_in_S == csize + 1) {
-					for (int ei = pstart[vin]; ei < pstart[vin + 1]; ++ei) {
-						int u = edges[ei];
-						//if (Must_not_in_S[u])continue;
+					for (int u : adj[vin]) {
+
 						if (S.count(u) && !C.count(u)) { vout = u; break; }
 					}
 
@@ -970,23 +902,18 @@ void tabu_search_core_conflict(const std::vector<int>& init_S_vec,
 
 
 				}
-				//int vin = weighted_choice_exp(cand_swap, freq);
-				//int vin = cand_swap[std::rand() % cand_swap.size()];
+
 
 			}
 		}
-		// -----------------------------
-		// Step 3️⃣ : 更新最优解
-		// -----------------------------
+
 		if ((int)S.size() > cur_best) {
 			cur_best = (int)S.size();
 			best_S_vec.assign(S.begin(), S.end());
 			depth = 0;
 		}
 
-		// -----------------------------
-		// Step 4️⃣ : 无改进 → 扰动重启
-		// -----------------------------
+
 		if (depth > (int)S.size() && !improved) {
 			std::unordered_set<int> to_remove;
 			for (int v : S) {
@@ -1005,6 +932,25 @@ void tabu_search_core_conflict(const std::vector<int>& init_S_vec,
 			for (int v : to_remove) {
 				S.erase(v);
 			}
+
+
+			std::vector<int> S_vec;
+			S_vec.reserve(S.size());
+			for (int v : S) S_vec.push_back(v);
+
+	
+			vector<double> w(Num_v);
+			for (int v = 0; v < Num_v; ++v) {
+				w[v] = (double)freq[v];
+			}
+			std::vector<int> S_repaired_vec = random_maximal_iuc(S_vec, &w);
+
+
+			std::unordered_set<int> S_new;
+			S_new.reserve(S_repaired_vec.size() * 2);
+			for (int v : S_repaired_vec) S_new.insert(v);
+			S.swap(S_new);
+
 
 			rebuild_from_S_conflict(S);
 		
@@ -1038,7 +984,6 @@ void run_tabu_search_multi()
 	if (Num_e <= 1000000)
 		reduction(Num_v - (int)S.size());
 
-
 	int comp_cnt = 0;
 
 	bool feasible = validate_iuc(S, comp_cnt);
@@ -1055,7 +1000,7 @@ void run_tabu_search_multi()
 		return;
 	}
 
-	//std::cout << "size of random maximal IUC: " << S.size() << " " << (double)(clock() - Start_time) / CLOCKS_PER_SEC << std::endl;
+	std::cout << Instance_name << "size of random maximal IUC: " << S.size() << " " << (double)(clock() - Start_time) / CLOCKS_PER_SEC << std::endl;
 
 
 	// 全局频率数组，顶点 v 被“惩罚”的次数
@@ -1077,8 +1022,8 @@ void run_tabu_search_multi()
 		vector<int> init_sol;
 		if (!has_res || nonImprove > 0) {
 			// Build weights from freq
-			vector<double> w(Num_v);
 			vector<int> empty_init;
+			vector<double> w(Num_v);
 
 			for (int v = 0; v < Num_v; ++v) {
 				w[v] = (double)freq[v];
@@ -1088,7 +1033,6 @@ void run_tabu_search_multi()
 			}
 
 			init_sol = random_maximal_iuc(empty_init, &w);
-			//cout << "init_sol.size()" << init_sol.size() << endl;
 			
 			if (K_opt == (int)init_sol.size() || Run_time >= Time_limit) {
 				return;
@@ -1100,7 +1044,7 @@ void run_tabu_search_multi()
 		vector<int> copy_init_sol = init_sol;
 		nonImprove += 1;
 
-		// 如果 freq 总和太大，就把它们减半
+
 		long long sum_freq = 0;
 		for (int x : freq) sum_freq += x;
 		if (sum_freq > 5LL * Num_v) {
@@ -1116,13 +1060,13 @@ void run_tabu_search_multi()
 
 		has_res = true;
 
-		// 更新 freq
+
 		unordered_set<int> res_set;
 		res_set.reserve(res.size() * 2);
 		for (int v : res) res_set.insert(v);
 		for (int v : copy_init_sol) {
 			if (!res_set.count(v)) {
-				// 如果某个顶点在初始解里，但最终解里没出现
+
 				if (v >= 0 && v < Num_v) {
 					freq[v] += 1;
 				}
@@ -1132,11 +1076,6 @@ void run_tabu_search_multi()
 				}
 			}
 		}
-
-		// test
-	/*	if (cur_best >= best) {
-			
-		}*/
 
 		//cout << "epoch------------" << it << " " << best << " " << (double)(clock() - Start_time) / CLOCKS_PER_SEC << endl;
 
@@ -1165,6 +1104,7 @@ void run_tabu_search_multi()
 				return;
 			}
 
+
 		}
 		else {
 			// otherwise
@@ -1181,16 +1121,15 @@ void run_tabu_search_multi()
 
 
 bool hasEdge(int u, int v) {
-	if (pstart[u + 1] - pstart[u] > pstart[v + 1] - pstart[v]) {
-		int t = u;
-		u = v;
-		v = t;
+	if ((int)adj[u].size() > (int)adj[v].size()) {
+		std::swap(u, v);
 	}
 
-	for (int i = pstart[u]; i < pstart[u + 1]; ++i) {
-		if (edges[i] == v) return true;
+	for (int x : adj[u]) {
+		if (x == v) return true;
 	}
 	return false;
+
 }
 
 
@@ -1218,8 +1157,7 @@ bool is_clique_comp_fast(const std::vector<int>& comp) {
 
 	for (int v : comp) {
 		int cnt = 0;
-		for (int ei = pstart[v]; ei < pstart[v + 1]; ++ei) {
-			int w = edges[ei];
+		for (int w : adj[v]) {
 			if (markComp[w] == stampComp) ++cnt;
 		}
 		if (cnt != s - 1) return false;
@@ -1271,7 +1209,7 @@ void reduction_rule_1()
 	comp.reserve(1024);
 
 	for (int start = 0; start < Num_v; ++start) {
-		//if (Must_not_in_S[start]) continue;
+
 		if (visited[start] == vstamp) continue;
 
 		st.clear();
@@ -1284,16 +1222,14 @@ void reduction_rule_1()
 			st.pop_back();
 			comp.push_back(v);
 
-			for (int ei = pstart[v]; ei < pstart[v + 1]; ++ei) {
-				int u = edges[ei];
-				//if (Must_not_in_S[u]) continue;
+			for (int u : adj[v])
+			{
 				if (visited[u] == vstamp) continue;
 				visited[u] = vstamp;
 				st.push_back(u);
 			}
 		}
 
-		// Reduction Rule 1: 如果该分量是 clique，则全部 Must_in
 		if (is_clique_comp_fast(comp)) {
 			for (int v : comp) Must_in_S[v] = 1;
 		}
@@ -1303,54 +1239,41 @@ void reduction_rule_1()
 
 // 归约规则 2：更新 Must_in_S 集合
 void reduction_rule_2() {
-
-	// (A) deg(v)=2 且存在 deg(x)=1 邻居: IN {v,x}, OUT {y}
+	// {x .v. y}
 	for (int v = 0; v < Num_v; ++v) {
 		if (Must_not_in_S[v]) continue;
 
-		int dv = pstart[v + 1] - pstart[v];
+		int dv = (int)adj[v].size();
 		if (dv != 2) continue;
 
-		int a = edges[pstart[v]];
-		int b = edges[pstart[v] + 1];
+		int a = adj[v][0];
+		int b = adj[v][1];
 
 		int x = -1, y = -1;
 
-		int da = pstart[a + 1] - pstart[a];
-		int db = pstart[b + 1] - pstart[b];
+		int da = (int)adj[a].size();
+		int db = (int)adj[b].size();
 
 		if (!Must_not_in_S[a] && da == 1) { x = a; y = b; }
 		else if (!Must_not_in_S[b] && db == 1) { x = b; y = a; }
 		else continue;
 
 		if (Must_not_in_S[x]) continue;
-		if (Must_in_S[y]) continue;     // 不能把已经 IN 的点 OUT
+		if (Must_in_S[y]) continue;  
 
 		Must_in_S[v] = 1;
 		Must_in_S[x] = 1;
 		Must_not_in_S[y] = 1;
 	}
 
-	// (B) deg(u)=1: IN {u}, OUT {neighbor}
+	// (B) deg(u)=1: IN {u}
 	for (int u = 0; u < Num_v; ++u) {
 		if (Must_not_in_S[u]) continue;
 
-		int du = pstart[u + 1] - pstart[u];
+		int du = (int)adj[u].size();
 		if (du != 1) continue;
 
-		int v = edges[pstart[u]]; // 唯一邻居
-
-		if (Must_in_S[v]) continue;  // v 已经 IN，不能 OUT v
-
-		int dv = pstart[v + 1] - pstart[v];
-
-		if (dv == 1) {
-			Must_in_S[u] = 1;
-			continue;
-		}
-
 		Must_in_S[u] = 1;
-		Must_not_in_S[v] = 1;
 	}
 }
 
@@ -1361,16 +1284,14 @@ void reduction_rule_3(int k)
 	forbidden_diff.clear();
 	remove_at_least_one.clear();
 
-	// 标记数组：mark[w] == 1 表示当前 u 的邻居里有 w
 	std::vector<char> mark(Num_v, 0);
 
 	int test_cnt = 0;
-	// 遍历所有节点对 (u, v)
+
 	for (int u = 0; u < Num_v; ++u) {
 		if (Degree[u] <= k) continue;
 
-		for (int ei = pstart[u]; ei < pstart[u + 1]; ++ei) {
-			int w = edges[ei];
+		for (int w : adj[u]) {
 			mark[w] = 1;
 		}
 
@@ -1379,19 +1300,17 @@ void reduction_rule_3(int k)
 
 			int common = 0;
 
-			for (int ei = pstart[v]; ei < pstart[v + 1]; ++ei) {
-				int w = edges[ei];
+			for (int w : adj[v]) {
 				if (mark[w]) {
 					++common;
-					if (common >= k + 1) break;  
+					if (common >= k + 1) break;
 				}
 			}
 
-			// 3) 如果交集大小 >= k + 1，则满足条件
-			if (common >= k + 1) {
-				forbidden_diff.insert({ u, v });  // 将 (u, v) 加入 forbidden_diff
 
-				// 如果 u 和 v 之间没有边，则进行处理
+			if (common >= k + 1) {
+				forbidden_diff.insert({ u, v });  
+
 				if (!hasEdge(u, v)) {
 					remove_at_least_one[u].insert(v);
 					remove_at_least_one[v].insert(u);
@@ -1400,11 +1319,10 @@ void reduction_rule_3(int k)
 			}
 		}
 
-		// 4) 清除 u 的邻居标记，为下一个 u 做准备
-		for (int ei = pstart[u]; ei < pstart[u + 1]; ++ei) {
-			int w = edges[ei];
+		for (int w : adj[u]) {
 			mark[w] = 0;
 		}
+
 
 	}
 
@@ -1420,8 +1338,9 @@ void degeneracy_ordering() {
 
 	std::vector<int> deg(Num_v, 0);
 	for (int u = 0; u < Num_v; ++u) {
-		deg[u] = pstart[u + 1] - pstart[u];  // 邻接表中边数量
+		deg[u] = (int)adj[u].size();
 	}
+
 
 	using PII = std::pair<int, int>;
 	std::priority_queue<PII, std::vector<PII>, std::greater<PII>> heap;
@@ -1438,50 +1357,47 @@ void degeneracy_ordering() {
 		heap.pop();
 		if (removed[v]) continue;
 
-		ordering.push_back(v);   // 加到退化序
-		core_number[v] = d;      // 记录核心数
+		ordering.push_back(v);   
+		core_number[v] = d;   
 		removed[v] = 1;
 
-		for (int ei = pstart[v]; ei < pstart[v + 1]; ++ei) {
-			int nb = edges[ei];
+		for (int nb : adj[v]) {
 			if (!removed[nb]) {
 				--deg[nb];
 				heap.emplace(deg[nb], nb);
 			}
 		}
+
 	}
 }
 
 
-// ===== 贪心染色上界（返回最大颜色编号）=====
 int scr_upperbound_color(const std::vector<int>& nodes,
 	const std::vector<int>& ordering)
 {
-	// 1️⃣ 标记子图中的点：in_nodes[u] == 1 表示 u ∈ nodes
 	std::vector<char> in_nodes(Num_v, 0);
 	for (int v : nodes) {
 		if (v >= 0 && v < Num_v)
 			in_nodes[v] = 1;
 	}
 
-	// 2️⃣ 初始化颜色：对所有顶点先置 0
 	std::vector<int> color(Num_v, 0);
 
-	// 3️⃣ 按给定顺序做贪心染色
 	for (int u : ordering) {
 		if (u < 0 || u >= Num_v) continue;
-		if (!in_nodes[u]) continue;  // if u not in g: continue
+		if (!in_nodes[u]) continue;  
 
-		// 收集 u 在子图中的邻居颜色
+
 		std::unordered_set<int> nei_colors;
-		for (int ei = pstart[u]; ei < pstart[u + 1]; ++ei) {
-			int v = edges[ei];
+
+		for (int v : adj[u]) {
+
 			if (v < 0 || v >= Num_v) continue;
-			if (!in_nodes[v]) continue;   // 只看 nodes 内的邻居
+			if (!in_nodes[v]) continue;  
 			nei_colors.insert(color[v]);
 		}
 
-		// while color[u] in nei_colors: color[u] += 1
+
 		while (nei_colors.count(color[u])) {
 			++color[u];
 		}
@@ -1497,14 +1413,13 @@ int scr_upperbound_color(const std::vector<int>& nodes,
 			max_color = color[v];
 	}
 
-	// 若子图为空，返回 0
 	if (!has_any) return 0;
 
 	return max_color;
 }
 
 
-// 取顶点 u 的一阶邻居 N(u)
+// N(u)
 void neighbors_of(int u, std::vector<int>& N1) {
 	N1.clear();
 	if (u < 0 || u >= Num_v) {
@@ -1512,14 +1427,14 @@ void neighbors_of(int u, std::vector<int>& N1) {
 		exit(-1);
 		return;
 	}
-	for (int ei = pstart[u]; ei < pstart[u + 1]; ++ei) {
-		int v = edges[ei];
+
+	for (int v : adj[u]) {
 		N1.push_back(v);
 	}
+
 }
 
 
-// reduction_rule_4：基于贪心染色上界的删点规则,如果选择u，则会删除多少个点
 void reduction_rule_4(int k) {
 	std::vector<int> ordering_rev = ordering;
 	std::reverse(ordering_rev.begin(), ordering_rev.end());
@@ -1535,10 +1450,10 @@ void reduction_rule_4(int k) {
 
 		Gu.clear();
 
-		for (int ei = pstart[u]; ei < pstart[u + 1]; ++ei) {
-			int v = edges[ei];
+		for (int v : adj[u]) {
 			Gu.push_back(v);
 		}
+
 		Gu.push_back(u);
 
 		int ub = scr_upperbound_color(Gu, ordering_rev);
@@ -1571,15 +1486,15 @@ void second_neighbors_of(int u, const std::vector<int>& N1, std::vector<int>& N2
 
 	for (int v : N1) {
 		if (v < 0 || v >= Num_v) continue;
-		for (int ei = pstart[v]; ei < pstart[v + 1]; ++ei) {
-			int w = edges[ei];
-			if (w == u) continue;        
-			if (inN1[w]) continue;        
-			if (!mark[w]) {              
+		for (int w : adj[v]) {
+			if (w == u) continue;
+			if (inN1[w]) continue;
+			if (!mark[w]) {
 				mark[w] = 1;
 				N2.push_back(w);
 			}
 		}
+
 	}
 }
 
@@ -1605,17 +1520,17 @@ int greedy_maximal_matching_bipartite(const std::vector<int>& N1,
 	for (int v : N1) {
 		if (v < 0 || v >= Num_v) continue;
 
-		for (int ei = pstart[v]; ei < pstart[v + 1]; ++ei) {
-			int w = edges[ei];
+		for (int w : adj[v]) {
 			if (w < 0 || w >= Num_v) continue;
 
 			int j = idxR[w];
 			if (j != -1 && !matchedR[j]) {
 				matchedR[j] = 1;
 				++match;
-				break; 
+				break;
 			}
 		}
+
 	}
 
 	return match;
@@ -1648,7 +1563,6 @@ void reduction_rule_5(int k)
 }
 
 
-// 在诱导子图 G[S_nodes] 上：统计 clique 连通分量个数是否 >= 2
 bool has_at_least_two_clique_components(const std::vector<int>& S_nodes) {
 
 	static std::vector<uint32_t> inS;
@@ -1694,13 +1608,13 @@ bool has_at_least_two_clique_components(const std::vector<int>& S_nodes) {
 			st.pop_back();
 			comp.push_back(v);
 
-			for (int ei = pstart[v]; ei < pstart[v + 1]; ++ei) {
-				int nb = edges[ei];
+			for (int nb : adj[v]) {
 				if (inS[nb] != stamp) continue;
 				if (visited[nb] == stamp) continue;
 				visited[nb] = stamp;
 				st.push_back(nb);
 			}
+
 		}
 
 		if (is_clique_comp_fast(comp)) {
@@ -1746,7 +1660,7 @@ void reduction_rule_6()
 		N1.clear();
 		for (int v : comps[index]) {
 			if (v == u)continue;
-			//if (Must_not_in_S[v])continue;
+
 			N1.push_back(v);
 		}
 
@@ -1763,10 +1677,10 @@ void reduction_rule_6()
 void closed_neighborhood_set(int v, std::set<int>& sig) {
 	sig.clear();
 	sig.insert(v);
-	for (int ei = pstart[v]; ei < pstart[v + 1]; ++ei) {
-		int u = edges[ei];
+	for (int u : adj[v]) {
 		sig.insert(u);
 	}
+
 }
 
 
@@ -1850,7 +1764,6 @@ void reduction_rule_7_8_sets(
 	std::vector<int> group_sizes;
 	num_groups = build_critical_cliques_groups_sets(group_of, groups, group_sizes);
 
-	// Rule 7：把足够大的关键团加入 Must_in_S
 	apply_rule7_sets(group_of, group_sizes, num_groups, k);
 }
 
