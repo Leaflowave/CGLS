@@ -3,28 +3,26 @@
 #include <unistd.h>
 
 char *Instance_name;	//instance name
-int *edges;    // ´æ´¢ËùÓĞ±ßµÄÄ¿±ê½Úµã
-int *pstart;   // Ã¿¸ö¶¥µãµÄ±ßÆğÊ¼Ë÷Òı
+vector<vector<int>> adj;   // é‚»æ¥è¡¨
 
-int *Degree;            //degree of each vertex
+vector<int> Degree;         //degree of each vertex
 int Num_v;				//number of vertices
 int Num_e;              //number of edges
 double Density;         //density of graph
 int K_opt;              //optimal size of IUC (available for some instances
 
-std::vector<int> Must_in_S;      // ÊÇ·ñ±ØĞëÑ¡
-std::vector<int> Must_not_in_S;  // ÊÇ·ñ½ûÖ¹Ñ¡
+std::vector<int> Must_in_S;      // æ˜¯å¦å¿…é¡»é€‰
+std::vector<int> Must_not_in_S;  // æ˜¯å¦ç¦æ­¢é€‰
 
-std::set<std::pair<int, int>> forbidden_diff;  // ´æ´¢²»ÔÊĞíµÄ½Úµã¶Ô
-std::unordered_map<int, std::unordered_set<int>> remove_at_least_one;  // ´æ´¢Ã¿¸ö½ÚµãĞèÒªÉ¾³ıµÄÁÚ¾Ó
+std::set<std::pair<int, int>> forbidden_diff;  // å­˜å‚¨ä¸å…è®¸çš„èŠ‚ç‚¹å¯¹
+std::unordered_map<int, std::unordered_set<int>> remove_at_least_one;  // å­˜å‚¨æ¯ä¸ªèŠ‚ç‚¹éœ€è¦åˆ é™¤çš„é‚»å±…
 
 int* degree;
 std::vector<int> ordering;
-std::unordered_map<int, int> core_number;  // ´æ´¢Ã¿¸ö½ÚµãµÄºËĞÄÊı
-int Compo_cnt;  // Á¬Í¨·ÖÁ¿ÊıÁ¿
+std::unordered_map<int, int> core_number;  // å­˜å‚¨æ¯ä¸ªèŠ‚ç‚¹çš„æ ¸å¿ƒæ•°
+int Compo_cnt;  // è¿é€šåˆ†é‡æ•°é‡
 
 double Time_limit, Start_time, Run_time;
-// µ¥´ÎÔËĞĞÊ±¼äÏŞÖÆ£¨3600Ãë£© 
 
 int best_size;
 std::vector<int> best_S;
@@ -46,14 +44,14 @@ int main(int argc, char* argv[])
 
 	srand(unsigned(time(NULL)));
 
-	//parameters // Ëã·¨²ÎÊıÅäÖÃ
+	//parameters 
 	Time_limit = 3600.0;
 	Compo_cnt = 0;
 
-	read_instance();   // ¶ÁÈ¡Í¼ÊµÀıÊı¾İ£¨¹¹½¨ÁÚ½Ó¾ØÕóµÈ£©
-	allocate_memory(); // Îª¸÷ÖÖÊı¾İ½á¹¹·ÖÅäÄÚ´æ
+	read_instance(); 
+	allocate_memory();
 
-	Start_time = clock(); // ¼ÇÂ¼¿ªÊ¼Ê±¼ä
+	Start_time = clock(); 
 	
 	run_tabu_search_multi();
 
@@ -75,6 +73,7 @@ int main(int argc, char* argv[])
 	}
 
 	cout << Instance_name << " "<<Num_v << " " << Num_e<<" ";
+	std::cout << "Density: " << Density << "  -----";
 	std::cout << "K_opt: " << K_opt << "  -----";
 	std::cout << "Best solution size = " << best_size << " ";
 	std::cout << "Run_time: " << Run_time <<"  -----";
@@ -93,3 +92,18 @@ int main(int argc, char* argv[])
 
 	return 0;
 }
+//for (int i = 0; i < Num_v; ++i) {
+	//	if (Must_in_S[i] != 0) {
+	//		cout << i << " ";
+	//	}
+	//}
+	//cout << endl;
+
+	//cout << "-----------------" << endl;
+
+	//for (int i = 0; i < Num_v; ++i) {
+	//	if (Must_not_in_S[i] != 0) {
+	//		cout << i << " ";
+	//	}
+	//}
+	//cout << endl;
