@@ -149,10 +149,10 @@ std::vector<int> random_maximal_iuc(const std::vector<int>& S_init,
 		};
 
 
-	std::vector<int> pool;                 // 候选顶点集合（无重复、干净）
-	std::vector<int> pos_pool(Num_v, -1);  // 顶点在 pool 中的位置
-	std::vector<int> pool_cid(Num_v, -2);  // v 在 pool 里时对应 cid：joinable->cid, uncovered->-1
-	double pool_sum_w = 0.0;               // pool 中权重总和
+	std::vector<int> pool;                 
+	std::vector<int> pos_pool(Num_v, -1);  
+	std::vector<int> pool_cid(Num_v, -2); 
+	double pool_sum_w = 0.0;              
 
 	auto pool_add = [&](int v, int cid) {
 		if (pos_pool[v] != -1) {
@@ -387,13 +387,13 @@ static inline std::unordered_set<int> neighbors_of(int v) {
 struct VertexInfo {
 	int nbr_in_S = 0;                         // |N(i) ∩ S|
 	std::unordered_map<int, int> nbr_in_C;    // cid -> |N(i) ∩ C|
-	int conflict = -1;                         // 当前冲突数 conflict(i)
-	int min_conflict_cluster = -1;            // 当前最小冲突的cluster id
+	int conflict = -1;                        
+	int min_conflict_cluster = -1;           
 	int judge_confict = 0;
 };
 
 std::vector<VertexInfo> vertex_info; // size = Num_v
-std::vector<std::unordered_set<int>> clusters;  // 每个 cluster C
+std::vector<std::unordered_set<int>> clusters;  
 
 
 static void rebuild_from_S_conflict(const std::unordered_set<int>& S)
@@ -878,7 +878,7 @@ void tabu_search_core_conflict(const std::vector<int>& init_S_vec,
 					int in_cc = (it != vertex_info[vin].nbr_in_C.end()) ? it->second : 0;
 					int vout = -1;
 
-					// ② OA：vin 与 C 全连，但与 C 外某点冲突
+					// ② OA
 					for (int u : adj[vin]) {
 
 						if (S.count(u) && !C.count(u)) { vout = u; break; }
