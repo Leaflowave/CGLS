@@ -1,4 +1,4 @@
-#include"func_state.h"
+﻿#include"func_state.h"
 #include"global_variables.h"
 #include <vector>
 #include <queue>

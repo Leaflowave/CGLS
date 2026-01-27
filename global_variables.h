@@ -22,7 +22,7 @@ using namespace std;
 #define TRISTATE -1
 
 extern char *Instance_name;		//instance name
-extern vector<vector<int>> adj;   // é‚»æ¥è¡¨
+extern vector<vector<int>> adj;   // ÁÚ½Ó±í
 
 extern  vector<int> Degree; //degree of each vertex
 extern int Num_v;				//number of vertices
@@ -30,17 +30,17 @@ extern int Num_e;               //number of edges
 extern double Density;          //density of graph
 extern int K_opt;               //optimal size of IUC (available for some instances)
 
-extern int Compo_cnt;  // è¿é€šåˆ†é‡æ•°é‡
+extern int Compo_cnt;  // Á¬Í¨·ÖÁ¿ÊıÁ¿
 
-extern std::vector<int> Must_in_S;      // æ˜¯å¦å¿…é¡»é€‰
-extern std::vector<int> Must_not_in_S;  // æ˜¯å¦ç¦æ­¢é€‰
+extern std::vector<int> Must_in_S;      // ÊÇ·ñ±ØĞëÑ¡
+extern std::vector<int> Must_not_in_S;  // ÊÇ·ñ½ûÖ¹Ñ¡
 
-extern set<pair<int, int>> forbidden_diff;  // å­˜å‚¨ä¸å…è®¸çš„èŠ‚ç‚¹å¯¹
-extern unordered_map<int, unordered_set<int>> remove_at_least_one;  // å­˜å‚¨æ¯ä¸ªèŠ‚ç‚¹éœ€è¦åˆ é™¤çš„é‚»å±…
+extern set<pair<int, int>> forbidden_diff;  // ´æ´¢²»ÔÊĞíµÄ½Úµã¶Ô
+extern unordered_map<int, unordered_set<int>> remove_at_least_one;  // ´æ´¢Ã¿¸ö½ÚµãĞèÒªÉ¾³ıµÄÁÚ¾Ó
 
 extern int* degree;
 extern vector<int> ordering;
-extern unordered_map<int, int> core_number;  // å­˜å‚¨æ¯ä¸ªèŠ‚ç‚¹çš„æ ¸å¿ƒæ•°
+extern unordered_map<int, int> core_number;  // ´æ´¢Ã¿¸ö½ÚµãµÄºËĞÄÊı
 
 
 extern double Time_limit, Start_time, Run_time;

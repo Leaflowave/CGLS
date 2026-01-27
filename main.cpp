@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 char *Instance_name;	//instance name
-vector<vector<int>> adj;   // é‚»æ¥è¡¨
+vector<vector<int>> adj;   // ÁÚ½Ó±í
 
 vector<int> Degree;         //degree of each vertex
 int Num_v;				//number of vertices
@@ -11,16 +11,16 @@ int Num_e;              //number of edges
 double Density;         //density of graph
 int K_opt;              //optimal size of IUC (available for some instances
 
-std::vector<int> Must_in_S;      // æ˜¯å¦å¿…é¡»é€‰
-std::vector<int> Must_not_in_S;  // æ˜¯å¦ç¦æ­¢é€‰
+std::vector<int> Must_in_S;      // ÊÇ·ñ±ØĞëÑ¡
+std::vector<int> Must_not_in_S;  // ÊÇ·ñ½ûÖ¹Ñ¡
 
-std::set<std::pair<int, int>> forbidden_diff;  // å­˜å‚¨ä¸å…è®¸çš„èŠ‚ç‚¹å¯¹
-std::unordered_map<int, std::unordered_set<int>> remove_at_least_one;  // å­˜å‚¨æ¯ä¸ªèŠ‚ç‚¹éœ€è¦åˆ é™¤çš„é‚»å±…
+std::set<std::pair<int, int>> forbidden_diff;  // ´æ´¢²»ÔÊĞíµÄ½Úµã¶Ô
+std::unordered_map<int, std::unordered_set<int>> remove_at_least_one;  // ´æ´¢Ã¿¸ö½ÚµãĞèÒªÉ¾³ıµÄÁÚ¾Ó
 
 int* degree;
 std::vector<int> ordering;
-std::unordered_map<int, int> core_number;  // å­˜å‚¨æ¯ä¸ªèŠ‚ç‚¹çš„æ ¸å¿ƒæ•°
-int Compo_cnt;  // è¿é€šåˆ†é‡æ•°é‡
+std::unordered_map<int, int> core_number;  // ´æ´¢Ã¿¸ö½ÚµãµÄºËĞÄÊı
+int Compo_cnt;  // Á¬Í¨·ÖÁ¿ÊıÁ¿
 
 double Time_limit, Start_time, Run_time;
 
