@@ -149,10 +149,10 @@ std::vector<int> random_maximal_iuc(const std::vector<int>& S_init,
 		};
 
 
-	std::vector<int> pool;                 
-	std::vector<int> pos_pool(Num_v, -1);  
-	std::vector<int> pool_cid(Num_v, -2); 
-	double pool_sum_w = 0.0;              
+	std::vector<int> pool;                 // 候选顶点集合（无重复、干净）
+	std::vector<int> pos_pool(Num_v, -1);  // 顶点在 pool 中的位置
+	std::vector<int> pool_cid(Num_v, -2);  // v 在 pool 里时对应 cid：joinable->cid, uncovered->-1
+	double pool_sum_w = 0.0;               // pool 中权重总和
 
 	auto pool_add = [&](int v, int cid) {
 		if (pos_pool[v] != -1) {
@@ -387,13 +387,13 @@ static inline std::unordered_set<int> neighbors_of(int v) {
 struct VertexInfo {
 	int nbr_in_S = 0;                         // |N(i) ∩ S|
 	std::unordered_map<int, int> nbr_in_C;    // cid -> |N(i) ∩ C|
-	int conflict = -1;                        
-	int min_conflict_cluster = -1;           
+	int conflict = -1;                         // 当前冲突数 conflict(i)
+	int min_conflict_cluster = -1;            // 当前最小冲突的cluster id
 	int judge_confict = 0;
 };
 
 std::vector<VertexInfo> vertex_info; // size = Num_v
-std::vector<std::unordered_set<int>> clusters;  
+std::vector<std::unordered_set<int>> clusters;  // 每个 cluster C
 
 
 static void rebuild_from_S_conflict(const std::unordered_set<int>& S)
@@ -878,7 +878,7 @@ void tabu_search_core_conflict(const std::vector<int>& init_S_vec,
 					int in_cc = (it != vertex_info[vin].nbr_in_C.end()) ? it->second : 0;
 					int vout = -1;
 
-					// ② OA
+					// ② OA：vin 与 C 全连，但与 C 外某点冲突
 					for (int u : adj[vin]) {
 
 						if (S.count(u) && !C.count(u)) { vout = u; break; }
@@ -945,11 +945,14 @@ void tabu_search_core_conflict(const std::vector<int>& init_S_vec,
 			}
 			std::vector<int> S_repaired_vec = random_maximal_iuc(S_vec, &w);
 
-
 			std::unordered_set<int> S_new;
 			S_new.reserve(S_repaired_vec.size() * 2);
 			for (int v : S_repaired_vec) S_new.insert(v);
 			S.swap(S_new);
+
+			if (K_opt == (int)S_repaired_vec.size() || (double)(clock() - Start_time) / CLOCKS_PER_SEC >= Time_limit) {
+				return;
+			}
 
 
 			rebuild_from_S_conflict(S);
@@ -967,8 +970,6 @@ void tabu_search_core_conflict(const std::vector<int>& init_S_vec,
 
 void run_tabu_search_multi()
 {
-	degeneracy_ordering();
-
 	reduction();
 
 	std::vector<int> S0;  // 初始解
@@ -981,8 +982,10 @@ void run_tabu_search_multi()
 
 	std::vector<int> S = random_maximal_iuc(S0, nullptr);
 
-	if (Num_e <= 1000000)
+	if (Num_e <= 1000000) {
+		degeneracy_ordering();
 		reduction(Num_v - (int)S.size());
+	}
 
 	int comp_cnt = 0;
 
@@ -996,7 +999,7 @@ void run_tabu_search_multi()
 	}
 	Compo_cnt = comp_cnt;
 
-	if (K_opt == (int)S.size() || Run_time >= Time_limit) {
+	if (K_opt == (int)S.size() || (double)(clock() - Start_time) / CLOCKS_PER_SEC >= Time_limit) {
 		return;
 	}
 
@@ -1034,7 +1037,7 @@ void run_tabu_search_multi()
 
 			init_sol = random_maximal_iuc(empty_init, &w);
 			
-			if (K_opt == (int)init_sol.size() || Run_time >= Time_limit) {
+			if (K_opt == (int)init_sol.size() || (double)(clock() - Start_time) / CLOCKS_PER_SEC >= Time_limit) {
 				return;
 			}			
 
@@ -1077,9 +1080,9 @@ void run_tabu_search_multi()
 			}
 		}
 
-		//cout << "epoch------------" << it << " " << best << " " << (double)(clock() - Start_time) / CLOCKS_PER_SEC << endl;
+		cout << "epoch------------" << it << " " << best << " " << best_size  << " " << (double)(clock() - Start_time) / CLOCKS_PER_SEC << endl;
 
-		if (cur_best > best) {
+		if (cur_best > best && cur_best > best_size) {
 			Run_time = (double)(clock() - Start_time) / CLOCKS_PER_SEC;
 
 			best = cur_best;
@@ -1099,11 +1102,8 @@ void run_tabu_search_multi()
 			Compo_cnt = comp_cnt;
 
 			if (Run_time >= Time_limit || K_opt == best) {
-				best_size = best;
-				best_S = best_res;
-				return;
+				break;
 			}
-
 
 		}
 		else {
@@ -1170,10 +1170,8 @@ void reduction()
 	reduction_rule_1();
 	
 	reduction_rule_2();
-	
-	if (Num_e <= 1000000) {
-		reduction_rule_6();
-	}
+
+	reduction_rule_6();
 }
 
 void reduction(int k) {

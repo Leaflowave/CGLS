@@ -7,7 +7,7 @@ vector<vector<int>> adj;   // аз╫с╠М
 
 vector<int> Degree;         //degree of each vertex
 int Num_v;				//number of vertices
-int Num_e;              //number of edges
+long long Num_e;              //number of edges
 double Density;         //density of graph
 int K_opt;              //optimal size of IUC (available for some instances
 
@@ -42,11 +42,14 @@ int main(int argc, char* argv[])
 	Instance_name = argv[1];
 	K_opt = atoi(argv[2]);
 
-	srand(unsigned(time(NULL)));
+	unsigned seed = (unsigned)time(NULL) ^ (unsigned)getpid();
+	srand(seed);
 
 	//parameters 
 	Time_limit = 3600.0;
 	Compo_cnt = 0;
+
+	Start_time = clock();
 
 	read_instance(); 
 	allocate_memory();
@@ -54,7 +57,6 @@ int main(int argc, char* argv[])
 	Start_time = clock(); 
 	
 	run_tabu_search_multi();
-
 
 	long long cnt_in = 0, cnt_out = 0;
 	for (int i = 0; i < Num_v; ++i) {

@@ -26,7 +26,7 @@ extern vector<vector<int>> adj;   // аз╫с╠М
 
 extern  vector<int> Degree; //degree of each vertex
 extern int Num_v;				//number of vertices
-extern int Num_e;               //number of edges
+extern long long Num_e;               //number of edges
 extern double Density;          //density of graph
 extern int K_opt;               //optimal size of IUC (available for some instances)
 

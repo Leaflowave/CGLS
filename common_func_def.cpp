@@ -24,7 +24,7 @@ void read_instance()
     char StrReading[MAXCAN];
     FIC >> StrReading;
 
-    int max_edg = 0;
+    long long max_edg = 0;
     vector<pair<int, int>> vp;   
     vp.reserve(1024);
 
@@ -69,7 +69,7 @@ void read_instance()
 
     if (max_edg != Num_e)
     {
-        printf("### Error max_edge != nb_edge, Num_e: %d, max_edge: %d ###\n",
+        printf("### Error max_edge != nb_edge, Num_e: %lld, max_edge: %lld ###\n",
             Num_e, max_edg);
         exit(-1);
     }
@@ -157,7 +157,7 @@ void build_complement_graph_csr()
         exit(-1);
     }
 
-    Num_e = (int)(sumDegC / 2);
+    Num_e = (long long)(sumDegC / 2);
     Density = 2.0 * Num_e / (1.0 * n * (n - 1));
 }
 
