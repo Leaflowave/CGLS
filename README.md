@@ -14,10 +14,10 @@ The codes are implemented under Ubuntu 22.04. Boost C++ 17 is also required for 
 # Build and Run
 In Linux/Ubuntu operating system, execute the following command to build the program.
 ```
-g++ main.cpp common_func_def.cpp local_search.cpp -o ALS -O3
+./compile.sh
 ```
 To run the executable file, call the following command.
 ```
-./ALS ./Instances/[dataset name].clq -1
+./build/IUC ./Instances/[dataset name].clq -1 <seed>
 ```
 Be sure to clean all the dependencies and executable files before building a different version of the code.
