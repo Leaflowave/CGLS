@@ -1,5 +1,5 @@
-# An Assignment-based Local Search for Maximum Independent Union of Cliques Problem
-The software and data in this repository are a snapshot of the software and data that were used in the research reported on in the paper An Assignment-based Local Search for Maximum Independent Union of Cliques Problem by Yiping Liu, Xinyu Wang and Yi Zhou.
+# CGLS: A Column Generation Heuristic for Maximum Independent Union of Cliques Problem
+The software and data in this repository are a snapshot of the software and data that were used in the research reported on in the paper "CGLS: A Column Generation Heuristic for Maximum Independent Union of Cliques Problem".
 
 # Description
 Given an undirected graph $G=(V,E)$, an independent union of cliques (IUC) is a subset of vertices $S\subseteq V$ such that each connected component of the subgraph induced by $S$ is a complete graph. The maximum IUC problem asks to find an IUC with the maximum number of vertices.  An example of The maximum IUC problem is shown in the following Figure. 
